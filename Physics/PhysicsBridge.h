@@ -44,6 +44,26 @@ extern "C"
         float positionY,
         float positionZ);
 
+    /// Adds a dynamic box with the given friction.
+    ARISEN_PHYSICS_API int Physics_AddDynamicBox(
+        void* world,
+        float halfExtentX,
+        float halfExtentY,
+        float halfExtentZ,
+        float positionX,
+        float positionY,
+        float positionZ,
+        float friction);
+
+    /// Adds a static capsule.
+    ARISEN_PHYSICS_API int Physics_AddStaticCapsule(
+        void* world,
+        float radius,
+        float halfHeightOfCylinder,
+        float positionX,
+        float positionY,
+        float positionZ);
+
     /// Advances the world by `stepCount` fixed steps. Returns 0 when the world is null.
     ARISEN_PHYSICS_API int Physics_Step(void* world, int stepCount);
 
@@ -58,6 +78,18 @@ extern "C"
 
     /// Reads a body's position into `outXyz` (three floats). Returns 0 for an unknown body.
     ARISEN_PHYSICS_API int Physics_GetBodyPosition(void* world, int body, float* outXyz);
+
+    /// Reads a body's rotation into `outXyzw` (four floats). Returns 0 for an unknown body.
+    ARISEN_PHYSICS_API int Physics_GetBodyRotation(void* world, int body, float* outXyzw);
+
+    /// Sets a body's rotation. The authored pose of a body is applied through this after creation.
+    ARISEN_PHYSICS_API int Physics_SetBodyRotation(
+        void* world,
+        int body,
+        float x,
+        float y,
+        float z,
+        float w);
 
     /// Casts a ray and reports the closest hit distance. Returns 0 when nothing is hit.
     ARISEN_PHYSICS_API int Physics_RayCastClosest(

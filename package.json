@@ -18,11 +18,23 @@
         "interface": "ArisenEngine.Physics.IPhysicsService",
         "priority": 100
       }
+    ],
+    "requires": [
+      "ArisenEngine.Resources.Serialization.ISceneComponentExtensionRegistry"
     ]
   },
   "dependencies": {
-    "com.arisen.core": "1.0.0"
+    "com.arisen.core": "1.0.0",
+    "com.arisen.ecs": "1.0.0",
+    "com.arisen.resources": "1.0.0"
   },
+  "subsystems": [
+    {
+      "class": "ArisenEngine.Physics.PhysicsRuntimeSubsystem",
+      "phase": "Running",
+      "priority": 90
+    }
+  ],
   "nativeRuntimes": {
     "win-x64": [
       {

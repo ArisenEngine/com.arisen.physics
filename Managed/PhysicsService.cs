@@ -67,6 +67,36 @@ internal sealed class PhysicsService : IPhysicsService
             positionY,
             positionZ));
 
+    public PhysicsBodyHandle AddDynamicBox(
+        PhysicsWorldHandle world,
+        PhysicsVec3 halfExtents,
+        PhysicsVec3 position,
+        float friction) =>
+        new(Physics_AddDynamicBox(
+            world.Value,
+            halfExtents.X,
+            halfExtents.Y,
+            halfExtents.Z,
+            position.X,
+            position.Y,
+            position.Z,
+            friction));
+
+    public PhysicsBodyHandle AddStaticCapsule(
+        PhysicsWorldHandle world,
+        float radius,
+        float halfHeightOfCylinder,
+        float positionX,
+        float positionY,
+        float positionZ) =>
+        new(Physics_AddStaticCapsule(
+            world.Value,
+            radius,
+            halfHeightOfCylinder,
+            positionX,
+            positionY,
+            positionZ));
+
     public bool Step(PhysicsWorldHandle world, int stepCount) =>
         world.IsValid && Physics_Step(world.Value, stepCount) != 0;
 
@@ -122,6 +152,35 @@ internal sealed class PhysicsService : IPhysicsService
             out distance) != 0;
     }
 
+    public bool TryGetBodyRotation(
+        PhysicsWorldHandle world,
+        PhysicsBodyHandle body,
+        out PhysicsQuat rotation)
+    {
+        rotation = default;
+        if (!world.IsValid || !body.IsValid)
+        {
+            return false;
+        }
+
+        Span<float> values = stackalloc float[4];
+        if (Physics_GetBodyRotation(world.Value, body.Value, ref values[0]) == 0)
+        {
+            return false;
+        }
+
+        rotation = new PhysicsQuat(values[0], values[1], values[2], values[3]);
+        return true;
+    }
+
+    public bool TrySetBodyRotation(
+        PhysicsWorldHandle world,
+        PhysicsBodyHandle body,
+        PhysicsQuat rotation) =>
+        world.IsValid &&
+        body.IsValid &&
+        Physics_SetBodyRotation(world.Value, body.Value, rotation.X, rotation.Y, rotation.Z, rotation.W) != 0;
+
     [DllImport(Library, EntryPoint = "Physics_GetSolverVersion", CallingConvention = CallingConvention.Cdecl)]
     private static extern int Physics_GetSolverVersion(ref byte buffer, int capacity);
 
@@ -150,6 +209,26 @@ internal sealed class PhysicsService : IPhysicsService
         float positionY,
         float positionZ);
 
+    [DllImport(Library, EntryPoint = "Physics_AddDynamicBox", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int Physics_AddDynamicBox(
+        nint world,
+        float halfExtentX,
+        float halfExtentY,
+        float halfExtentZ,
+        float positionX,
+        float positionY,
+        float positionZ,
+        float friction);
+
+    [DllImport(Library, EntryPoint = "Physics_AddStaticCapsule", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int Physics_AddStaticCapsule(
+        nint world,
+        float radius,
+        float halfHeightOfCylinder,
+        float positionX,
+        float positionY,
+        float positionZ);
+
     [DllImport(Library, EntryPoint = "Physics_Step", CallingConvention = CallingConvention.Cdecl)]
     private static extern int Physics_Step(nint world, int stepCount);
 
@@ -164,6 +243,18 @@ internal sealed class PhysicsService : IPhysicsService
 
     [DllImport(Library, EntryPoint = "Physics_GetBodyPosition", CallingConvention = CallingConvention.Cdecl)]
     private static extern int Physics_GetBodyPosition(nint world, int body, ref float outXyz);
+
+    [DllImport(Library, EntryPoint = "Physics_GetBodyRotation", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int Physics_GetBodyRotation(nint world, int body, ref float outXyzw);
+
+    [DllImport(Library, EntryPoint = "Physics_SetBodyRotation", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int Physics_SetBodyRotation(
+        nint world,
+        int body,
+        float x,
+        float y,
+        float z,
+        float w);
 
     [DllImport(Library, EntryPoint = "Physics_RayCastClosest", CallingConvention = CallingConvention.Cdecl)]
     private static extern int Physics_RayCastClosest(

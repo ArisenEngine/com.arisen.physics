@@ -40,6 +40,22 @@ public interface IPhysicsService
         float positionY,
         float positionZ);
 
+    /// <summary>Adds a dynamic box with the given friction.</summary>
+    PhysicsBodyHandle AddDynamicBox(
+        PhysicsWorldHandle world,
+        PhysicsVec3 halfExtents,
+        PhysicsVec3 position,
+        float friction);
+
+    /// <summary>Adds a static capsule.</summary>
+    PhysicsBodyHandle AddStaticCapsule(
+        PhysicsWorldHandle world,
+        float radius,
+        float halfHeightOfCylinder,
+        float positionX,
+        float positionY,
+        float positionZ);
+
     /// <summary>Advances the world by fixed steps. Returns false when the world is not valid.</summary>
     bool Step(PhysicsWorldHandle world, int stepCount);
 
@@ -54,6 +70,12 @@ public interface IPhysicsService
 
     /// <summary>Reads a body's world position.</summary>
     bool TryGetBodyPosition(PhysicsWorldHandle world, PhysicsBodyHandle body, out PhysicsVec3 position);
+
+    /// <summary>Reads a body's world rotation.</summary>
+    bool TryGetBodyRotation(PhysicsWorldHandle world, PhysicsBodyHandle body, out PhysicsQuat rotation);
+
+    /// <summary>Sets a body's rotation, which is how an authored pose is applied after creation.</summary>
+    bool TrySetBodyRotation(PhysicsWorldHandle world, PhysicsBodyHandle body, PhysicsQuat rotation);
 
     /// <summary>Casts a ray and reports the closest hit distance along the normalized direction.</summary>
     bool TryRayCastClosest(
@@ -78,3 +100,6 @@ public readonly record struct PhysicsBodyHandle(int Value)
 
 /// <summary>Plain-data vector at the boundary; the solver's own types never cross it.</summary>
 public readonly record struct PhysicsVec3(float X, float Y, float Z);
+
+/// <summary>Plain-data quaternion at the boundary, in x/y/z/w order.</summary>
+public readonly record struct PhysicsQuat(float X, float Y, float Z, float W);

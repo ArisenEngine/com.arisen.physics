@@ -271,6 +271,55 @@ int Physics_AddCapsule(
     return target->AddBody(settings);
 }
 
+int Physics_AddDynamicBox(
+    void* world,
+    float halfExtentX,
+    float halfExtentY,
+    float halfExtentZ,
+    float positionX,
+    float positionY,
+    float positionZ,
+    float friction)
+{
+    World* target = AsWorld(world);
+    if (target == nullptr)
+    {
+        return -1;
+    }
+
+    BodyCreationSettings settings(
+        new BoxShape(Vec3(halfExtentX, halfExtentY, halfExtentZ)),
+        RVec3(positionX, positionY, positionZ),
+        Quat::sIdentity(),
+        EMotionType::Dynamic,
+        Layers::Moving);
+    settings.mFriction = friction;
+    return target->AddBody(settings);
+}
+
+int Physics_AddStaticCapsule(
+    void* world,
+    float radius,
+    float halfHeightOfCylinder,
+    float positionX,
+    float positionY,
+    float positionZ)
+{
+    World* target = AsWorld(world);
+    if (target == nullptr)
+    {
+        return -1;
+    }
+
+    BodyCreationSettings settings(
+        new CapsuleShape(halfHeightOfCylinder, radius),
+        RVec3(positionX, positionY, positionZ),
+        Quat::sIdentity(),
+        EMotionType::Static,
+        Layers::NonMoving);
+    return target->AddBody(settings);
+}
+
 int Physics_Step(void* world, int stepCount)
 {
     World* target = AsWorld(world);
@@ -341,6 +390,52 @@ int Physics_GetBodyPosition(void* world, int body, float* outXyz)
     outXyz[0] = static_cast<float>(position.GetX());
     outXyz[1] = static_cast<float>(position.GetY());
     outXyz[2] = static_cast<float>(position.GetZ());
+    return 1;
+}
+
+int Physics_GetBodyRotation(void* world, int body, float* outXyzw)
+{
+    World* target = AsWorld(world);
+    if (target == nullptr || outXyzw == nullptr || body < 0 || body >= MaxHandles)
+    {
+        return 0;
+    }
+
+    BodyID id = target->Bodies[body];
+    if (id.IsInvalid())
+    {
+        return 0;
+    }
+
+    Quat rotation = target->System.GetBodyInterface().GetRotation(id);
+    outXyzw[0] = rotation.GetX();
+    outXyzw[1] = rotation.GetY();
+    outXyzw[2] = rotation.GetZ();
+    outXyzw[3] = rotation.GetW();
+    return 1;
+}
+
+int Physics_SetBodyRotation(void* world, int body, float x, float y, float z, float w)
+{
+    World* target = AsWorld(world);
+    if (target == nullptr || body < 0 || body >= MaxHandles)
+    {
+        return 0;
+    }
+
+    BodyID id = target->Bodies[body];
+    if (id.IsInvalid())
+    {
+        return 0;
+    }
+
+    Quat rotation(x, y, z, w);
+    if (rotation.LengthSq() <= 0.0f)
+    {
+        return 0;
+    }
+
+    target->System.GetBodyInterface().SetRotation(id, rotation.Normalized(), EActivation::DontActivate);
     return 1;
 }
 
