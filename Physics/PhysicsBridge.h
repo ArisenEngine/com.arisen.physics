@@ -4,7 +4,11 @@
 // managed service binds to this header and no caller needs a solver type. Handles are opaque.
 
 #if defined(_WIN32)
+#if defined(PHYSICS_EXPORTS)
 #define ARISEN_PHYSICS_API __declspec(dllexport)
+#else
+#define ARISEN_PHYSICS_API __declspec(dllimport)
+#endif
 #else
 #define ARISEN_PHYSICS_API
 #endif
@@ -42,6 +46,15 @@ extern "C"
 
     /// Advances the world by `stepCount` fixed steps. Returns 0 when the world is null.
     ARISEN_PHYSICS_API int Physics_Step(void* world, int stepCount);
+
+    /// Bodies the world currently owns.
+    ARISEN_PHYSICS_API int Physics_GetBodyCount(void* world);
+
+    /// Removes a body the world owns. Returns 0 for an unknown handle.
+    ARISEN_PHYSICS_API int Physics_RemoveBody(void* world, int body);
+
+    /// Worlds that exist right now, so a gate can see a leak without inspecting the solver.
+    ARISEN_PHYSICS_API int Physics_GetLiveWorldCount();
 
     /// Reads a body's position into `outXyz` (three floats). Returns 0 for an unknown body.
     ARISEN_PHYSICS_API int Physics_GetBodyPosition(void* world, int body, float* outXyz);

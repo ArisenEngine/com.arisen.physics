@@ -43,6 +43,15 @@ public interface IPhysicsService
     /// <summary>Advances the world by fixed steps. Returns false when the world is not valid.</summary>
     bool Step(PhysicsWorldHandle world, int stepCount);
 
+    /// <summary>Bodies the world currently owns.</summary>
+    int GetBodyCount(PhysicsWorldHandle world);
+
+    /// <summary>Removes a body the world owns. Returns false for an unknown handle.</summary>
+    bool RemoveBody(PhysicsWorldHandle world, PhysicsBodyHandle body);
+
+    /// <summary>Worlds that exist right now, so a leak is visible without inspecting the solver.</summary>
+    int LiveWorldCount { get; }
+
     /// <summary>Reads a body's world position.</summary>
     bool TryGetBodyPosition(PhysicsWorldHandle world, PhysicsBodyHandle body, out PhysicsVec3 position);
 

@@ -2,6 +2,7 @@
 
 #include <cstdio>
 #include <cstring>
+#include <atomic>
 #include <memory>
 #include <vector>
 
@@ -104,6 +105,8 @@ namespace
     constexpr unsigned int TempAllocatorBytes = 10u * 1024u * 1024u;
     constexpr int MaxHandles = 4096;
 
+    std::atomic<int> s_LiveWorlds { 0 };
+
     struct World
     {
         TempAllocatorImpl TempAllocator { TempAllocatorBytes };
@@ -129,6 +132,14 @@ namespace
             System.SetGravity(Vec3(0.0f, -9.81f, 0.0f));
             Bodies.resize(MaxHandles, BodyID());
             Initialized = true;
+            s_LiveWorlds.fetch_add(1, std::memory_order_relaxed);
+        }
+
+        ~World()
+        {
+            // The system's bodies and the job system's threads are released with the world, which is
+            // what makes a destroyed world leave nothing behind.
+            s_LiveWorlds.fetch_sub(1, std::memory_order_relaxed);
         }
 
         int AddBody(const BodyCreationSettings& settings)
@@ -268,8 +279,48 @@ int Physics_Step(void* world, int stepCount)
         return 0;
     }
 
-    target->System.Update(FixedTimeStep, stepCount, &target->TempAllocator, &target->JobSystem);
+    // Jolt's Update splits one frame delta into `inCollisionSteps` collision sub-steps, so the fixed
+    // step is the delta: `stepCount` fixed steps are `stepCount` updates of one sub-step each. Passing
+    // the count as the sub-step count instead would advance a single 1/60 s frame, which is why the
+    // first gate read a capsule that had barely moved.
+    for (int step = 0; step < stepCount; step++)
+    {
+        target->System.Update(FixedTimeStep, 1, &target->TempAllocator, &target->JobSystem);
+    }
+
     return 1;
+}
+
+int Physics_GetBodyCount(void* world)
+{
+    World* target = AsWorld(world);
+    return target == nullptr ? 0 : static_cast<int>(target->System.GetNumBodies());
+}
+
+int Physics_RemoveBody(void* world, int body)
+{
+    World* target = AsWorld(world);
+    if (target == nullptr || body < 0 || body >= MaxHandles)
+    {
+        return 0;
+    }
+
+    BodyID id = target->Bodies[body];
+    if (id.IsInvalid())
+    {
+        return 0;
+    }
+
+    BodyInterface& bodies = target->System.GetBodyInterface();
+    bodies.RemoveBody(id);
+    bodies.DestroyBody(id);
+    target->Bodies[body] = BodyID();
+    return 1;
+}
+
+int Physics_GetLiveWorldCount()
+{
+    return s_LiveWorlds.load(std::memory_order_relaxed);
 }
 
 int Physics_GetBodyPosition(void* world, int body, float* outXyz)

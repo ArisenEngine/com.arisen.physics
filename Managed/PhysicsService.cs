@@ -70,6 +70,14 @@ internal sealed class PhysicsService : IPhysicsService
     public bool Step(PhysicsWorldHandle world, int stepCount) =>
         world.IsValid && Physics_Step(world.Value, stepCount) != 0;
 
+    public int GetBodyCount(PhysicsWorldHandle world) =>
+        world.IsValid ? Physics_GetBodyCount(world.Value) : 0;
+
+    public bool RemoveBody(PhysicsWorldHandle world, PhysicsBodyHandle body) =>
+        world.IsValid && body.IsValid && Physics_RemoveBody(world.Value, body.Value) != 0;
+
+    public int LiveWorldCount => Physics_GetLiveWorldCount();
+
     public bool TryGetBodyPosition(
         PhysicsWorldHandle world,
         PhysicsBodyHandle body,
@@ -144,6 +152,15 @@ internal sealed class PhysicsService : IPhysicsService
 
     [DllImport(Library, EntryPoint = "Physics_Step", CallingConvention = CallingConvention.Cdecl)]
     private static extern int Physics_Step(nint world, int stepCount);
+
+    [DllImport(Library, EntryPoint = "Physics_GetBodyCount", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int Physics_GetBodyCount(nint world);
+
+    [DllImport(Library, EntryPoint = "Physics_RemoveBody", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int Physics_RemoveBody(nint world, int body);
+
+    [DllImport(Library, EntryPoint = "Physics_GetLiveWorldCount", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int Physics_GetLiveWorldCount();
 
     [DllImport(Library, EntryPoint = "Physics_GetBodyPosition", CallingConvention = CallingConvention.Cdecl)]
     private static extern int Physics_GetBodyPosition(nint world, int body, ref float outXyz);

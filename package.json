@@ -33,5 +33,13 @@
         ]
       }
     ]
+  },
+  "nativeTests": {
+    "win-x64": [
+      {
+        "library": "Arisen.Physics.Test.dll",
+        "registerExport": "RegisterNativeTests"
+      }
+    ]
   }
 }
