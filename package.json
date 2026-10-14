@@ -1,0 +1,37 @@
+{
+  "id": "com.arisen.physics",
+  "name": "Arisen Physics",
+  "version": "1.0.0",
+  "engine": {
+    "minVersion": "0.1.0"
+  },
+  "layer": "domain",
+  "description": "Rigid-body simulation behind a package boundary: the vendored Jolt solver plus the flat C ABI and managed service that gameplay packages consume. Solver types never leave this package.",
+  "type": "hybrid",
+  "entry": {
+    "assembly": "Com.Arisen.Physics.dll",
+    "class": "ArisenEngine.Physics.PhysicsPackage"
+  },
+  "services": {
+    "provides": [
+      {
+        "interface": "ArisenEngine.Physics.IPhysicsService",
+        "priority": 100
+      }
+    ]
+  },
+  "dependencies": {
+    "com.arisen.core": "1.0.0"
+  },
+  "nativeRuntimes": {
+    "win-x64": [
+      {
+        "path": "Physics.dll",
+        "exports": [
+          "Physics_GetSolverVersion",
+          "Physics_CreateWorld"
+        ]
+      }
+    ]
+  }
+}

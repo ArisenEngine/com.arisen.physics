@@ -1,0 +1,6 @@
+{
+  "entry": {
+    "assembly": "Com.Arisen.Physics.dll",
+    "class": "ArisenEngine.Physics.PhysicsPackage"
+  }
+}
