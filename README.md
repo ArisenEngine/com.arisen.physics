@@ -17,5 +17,13 @@ a closest-hit ray query, with the solver initialized per process and stepped onl
 D2's first slice adds authored rigid bodies: explicit box/capsule shapes with a center offset are
 declared on scene entities, the runtime creates and destroys bodies with their entities, steps the
 world in fixed increments, and writes the pose back into the entity transform. What remains of D2 is
-cooked collision derived from the authored meshes; D3 adds the character controller and the hit/hurt
-queries combat reads.
+cooked collision derived from the authored meshes.
+
+D3 adds the character controller and the queries combat reads: a `CharacterController` scene
+component binds a kinematic capsule whose base is the entity's transform origin, the runtime moves
+it through the solver - sliding along blocked geometry, stepping up low stairs, sticking to the
+floor, and integrating gravity while airborne - and drives it from camera-relative input in
+interactive runs. `RayCastClosest` and a sphere overlap answer the hit/hurt queries, the native
+`PhysicsCharacterControllerTest` gates the whole controller path headlessly, and the `physics-settle`
+scenario also requires every authored character to be grounded, so the component-to-solver-to-
+transform path is gated through ECS as well.

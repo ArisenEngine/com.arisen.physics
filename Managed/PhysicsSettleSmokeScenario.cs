@@ -53,6 +53,8 @@ internal sealed class PhysicsSettleSmokeScenario : IRuntimeSmokeScenario
     private readonly RuntimeSmokeScenarioContext m_Context;
     private readonly IPhysicsService m_Physics;
     private readonly Dictionary<Entity, BodyObservation> m_Bodies = new();
+    private readonly Dictionary<Entity, CharacterObservation> m_Characters = new();
+    private PhysicsRuntimeSubsystem? m_Runtime;
     private SceneSubsystem? m_Scenes;
     private string? m_FailureMessage;
     private bool m_ReadyForShutdown;
@@ -80,6 +82,7 @@ internal sealed class PhysicsSettleSmokeScenario : IRuntimeSmokeScenario
     {
         m_LastFrame = initialFrameIndex;
         m_Scenes = EngineKernel.Instance.GetSubsystem<SceneSubsystem>();
+        m_Runtime = EngineKernel.Instance.GetSubsystem<PhysicsRuntimeSubsystem>();
         if (m_Scenes == null)
         {
             ReportFailure("The scene subsystem is not available for the physics settle gate.");
@@ -139,6 +142,28 @@ internal sealed class PhysicsSettleSmokeScenario : IRuntimeSmokeScenario
             observation.SettledY = transform.Position.Y;
         }
 
+        // Characters authored in the scene must be standing on walkable ground by the time the
+        // gate completes; the character controller is otherwise only exercised by its own gate.
+        ComponentPool<CharacterControllerComponent> controllers =
+            manager.GetPool<CharacterControllerComponent>();
+        ReadOnlySpan<Entity> controllerEntities = controllers.GetRawEntityArray();
+        for (int index = 0; index < controllers.Count; index++)
+        {
+            Entity entity = controllerEntities[index];
+            if (!m_Characters.TryGetValue(entity, out CharacterObservation? character))
+            {
+                character = new CharacterObservation();
+                m_Characters.Add(entity, character);
+            }
+
+            if (m_Runtime != null &&
+                m_Runtime.TryGetCharacterObservation(entity, out float feetY, out bool grounded))
+            {
+                character.FeetY = feetY;
+                character.Grounded = grounded;
+            }
+        }
+
         if (m_Bodies.Count == 0)
         {
             return;
@@ -147,6 +172,14 @@ internal sealed class PhysicsSettleSmokeScenario : IRuntimeSmokeScenario
         foreach (BodyObservation observation in m_Bodies.Values)
         {
             if (!observation.IsSettled)
+            {
+                return;
+            }
+        }
+
+        foreach (CharacterObservation character in m_Characters.Values)
+        {
+            if (!character.Grounded)
             {
                 return;
             }
@@ -165,8 +198,9 @@ internal sealed class PhysicsSettleSmokeScenario : IRuntimeSmokeScenario
         }
 
         KernelLog.InfoFormat(
-            "[PhysicsSettle] {0} dynamic body(ies) settled after {1} frame(s).",
+            "[PhysicsSettle] {0} dynamic body(ies) settled and {1} character(s) grounded after {2} frame(s).",
             m_Bodies.Count,
+            m_Characters.Count,
             frameIndex);
         m_ReadyForShutdown = true;
     }
@@ -207,6 +241,11 @@ internal sealed class PhysicsSettleSmokeScenario : IRuntimeSmokeScenario
                     observation.SettledY,
                     observation.RestFrames,
                     observation.IsSettled))
+                .ToArray(),
+            Characters: m_Characters.Values
+                .Select(observation => new PhysicsSettleCharacterArtifact(
+                    observation.FeetY,
+                    observation.Grounded))
                 .ToArray(),
             Failure: m_FailureMessage);
 
@@ -254,6 +293,12 @@ internal sealed class PhysicsSettleSmokeScenario : IRuntimeSmokeScenario
         public bool IsSettled => RestFrames >= RequiredRestFrames;
     }
 
+    private sealed class CharacterObservation
+    {
+        public float FeetY { get; set; }
+        public bool Grounded { get; set; }
+    }
+
     private sealed record PhysicsSettleSmokeArtifact(
         int SchemaVersion,
         string Mode,
@@ -263,6 +308,7 @@ internal sealed class PhysicsSettleSmokeScenario : IRuntimeSmokeScenario
         uint Frames,
         int LivePhysicsWorldsAfterShutdown,
         IReadOnlyList<PhysicsSettleBodyArtifact> Bodies,
+        IReadOnlyList<PhysicsSettleCharacterArtifact> Characters,
         string? Failure);
 
     private sealed record PhysicsSettleBodyArtifact(
@@ -270,4 +316,8 @@ internal sealed class PhysicsSettleSmokeScenario : IRuntimeSmokeScenario
         float SettledY,
         int RestFrames,
         bool Settled);
+
+    private sealed record PhysicsSettleCharacterArtifact(
+        float FeetY,
+        bool Grounded);
 }

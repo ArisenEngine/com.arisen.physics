@@ -84,6 +84,46 @@ public interface IPhysicsService
         PhysicsVec3 direction,
         float maxDistance,
         out float distance);
+
+    /// <summary>True when any body overlaps the sphere, the melee-style query combat reads.</summary>
+    bool TryOverlapSphere(PhysicsWorldHandle world, PhysicsVec3 center, float radius);
+
+    /// <summary>
+    /// Creates a kinematic character capsule whose base (feet) is at <paramref name="feetPosition"/>.
+    /// The solver slides it along geometry, steps it up stairs, and keeps it on walkable ground.
+    /// </summary>
+    PhysicsCharacterHandle CreateCharacter(
+        PhysicsWorldHandle world,
+        float radius,
+        float halfHeightOfCylinder,
+        PhysicsVec3 feetPosition);
+
+    void DestroyCharacter(PhysicsWorldHandle world, PhysicsCharacterHandle character);
+
+    /// <summary>
+    /// Advances one character by <paramref name="deltaTime"/>. The horizontal displacement is
+    /// sticky - blocked geometry redirects it instead of stopping it - and gravity is integrated
+    /// while the character is airborne.
+    /// </summary>
+    bool MoveCharacter(
+        PhysicsWorldHandle world,
+        PhysicsCharacterHandle character,
+        float displacementX,
+        float displacementZ,
+        float deltaTime,
+        out PhysicsVec3 feetPosition,
+        out bool grounded);
+
+    bool TryGetCharacterPosition(
+        PhysicsWorldHandle world,
+        PhysicsCharacterHandle character,
+        out PhysicsVec3 feetPosition);
+
+    /// <summary>True while the solver reports the character standing on walkable ground.</summary>
+    bool IsCharacterGrounded(PhysicsWorldHandle world, PhysicsCharacterHandle character);
+
+    /// <summary>Characters alive in this world, so a gate can see a leak.</summary>
+    int GetCharacterCount(PhysicsWorldHandle world);
 }
 
 /// <summary>An owned simulation world. A default handle is not valid.</summary>
@@ -94,6 +134,12 @@ public readonly record struct PhysicsWorldHandle(nint Value)
 
 /// <summary>A body owned by a world. A negative handle is not valid.</summary>
 public readonly record struct PhysicsBodyHandle(int Value)
+{
+    public bool IsValid => Value >= 0;
+}
+
+/// <summary>A character owned by a world. A negative handle is not valid.</summary>
+public readonly record struct PhysicsCharacterHandle(int Value)
 {
     public bool IsValid => Value >= 0;
 }

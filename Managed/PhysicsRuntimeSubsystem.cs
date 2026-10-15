@@ -1,7 +1,9 @@
 using System.Numerics;
 using ArisenEngine.Core.ECS;
+using ArisenEngine.Core.Math;
 using ArisenEngine.ECS.Lifecycle;
 using ArisenKernel.Diagnostics;
+using ArisenKernel.Contracts;
 using ArisenKernel.Lifecycle;
 
 namespace ArisenEngine.Physics;
@@ -23,9 +25,13 @@ public sealed class PhysicsRuntimeSubsystem : ITickableSubsystem
     private const int MaxStepsPerFrame = 8;
 
     private readonly Dictionary<Entity, PhysicsBodyHandle> m_Bodies = new();
+    private readonly Dictionary<Entity, PhysicsCharacterHandle> m_Characters = new();
     private readonly List<Entity> m_Removals = new();
     private IPhysicsService? m_Physics;
     private SceneSubsystem? m_Scenes;
+    private IInputProvider? m_Input;
+    private Entity m_CameraEntity;
+    private bool m_HasCamera;
     private PhysicsWorldHandle m_World;
     private EntityManager? m_BoundManager;
     private float m_Accumulator;
@@ -48,6 +54,7 @@ public sealed class PhysicsRuntimeSubsystem : ITickableSubsystem
         m_Scenes = kernel.GetSubsystem<SceneSubsystem>()
             ?? throw new InvalidOperationException("Physics runtime requires SceneSubsystem.");
         m_Physics = kernel.Services.GetService<IPhysicsService>();
+        kernel.Services.TryGetService<IInputProvider>(out m_Input);
 #endif
     }
 
@@ -74,11 +81,13 @@ public sealed class PhysicsRuntimeSubsystem : ITickableSubsystem
         }
 
         ComponentPool<RigidBodyComponent> bodies = manager.GetPool<RigidBodyComponent>();
+        ComponentPool<CharacterControllerComponent> characters =
+            manager.GetPool<CharacterControllerComponent>();
         if (!m_World.IsValid)
         {
-            if (bodies.Count == 0)
+            if (bodies.Count == 0 && characters.Count == 0)
             {
-                // A scene with no authored bodies never pays for a solver world.
+                // A scene with no authored bodies or characters never pays for a solver world.
                 return;
             }
 
@@ -86,15 +95,18 @@ public sealed class PhysicsRuntimeSubsystem : ITickableSubsystem
         }
 
         BindAuthoredBodies(manager, bodies);
-        if (!m_HasLoggedStart && m_Bodies.Count > 0)
+        BindCharacters(manager, characters);
+        if (!m_HasLoggedStart && (m_Bodies.Count > 0 || m_Characters.Count > 0))
         {
             m_HasLoggedStart = true;
             KernelLog.InfoFormat(
-                "[PhysicsRuntime] Simulation started with {0} authored body(ies).",
-                m_Bodies.Count);
+                "[PhysicsRuntime] Simulation started with {0} authored body(ies) and {1} character(s).",
+                m_Bodies.Count,
+                m_Characters.Count);
         }
 
         StepWorld(deltaTime);
+        MoveCharacters(deltaTime, manager, characters);
         WriteBackPoses(manager, bodies);
     }
 
@@ -193,6 +205,191 @@ public sealed class PhysicsRuntimeSubsystem : ITickableSubsystem
                 position.Z)
         };
 
+    private void BindCharacters(
+        EntityManager manager,
+        ComponentPool<CharacterControllerComponent> characters)
+    {
+        ReadOnlySpan<Entity> entities = characters.GetRawEntityArray();
+        ComponentPool<TransformComponent> transforms = manager.GetPool<TransformComponent>();
+        for (int index = 0; index < characters.Count; index++)
+        {
+            Entity entity = entities[index];
+            if (m_Characters.ContainsKey(entity))
+            {
+                continue;
+            }
+
+            ref CharacterControllerComponent controller = ref characters.GetRef(entity);
+            ref TransformComponent transform = ref transforms.GetRef(entity);
+            // The character's base is the entity's transform origin, so the visible capsule mesh
+            // lines up with the collision capsule without an offset.
+            PhysicsCharacterHandle handle = m_Physics!.CreateCharacter(
+                m_World,
+                controller.Radius,
+                controller.HalfHeight,
+                new PhysicsVec3(transform.Position.X, transform.Position.Y, transform.Position.Z));
+            if (!handle.IsValid)
+            {
+                KernelLog.ErrorFormat(
+                    "[PhysicsRuntime] Entity '{0}' could not register its character.",
+                    entity);
+                continue;
+            }
+
+            m_Characters.Add(entity, handle);
+        }
+
+        m_Removals.Clear();
+        foreach (Entity tracked in m_Characters.Keys)
+        {
+            if (!characters.Has(tracked))
+            {
+                m_Removals.Add(tracked);
+            }
+        }
+
+        for (int index = 0; index < m_Removals.Count; index++)
+        {
+            Entity tracked = m_Removals[index];
+            m_Physics!.DestroyCharacter(m_World, m_Characters[tracked]);
+            m_Characters.Remove(tracked);
+        }
+    }
+
+    private void MoveCharacters(
+        float deltaTime,
+        EntityManager manager,
+        ComponentPool<CharacterControllerComponent> characters)
+    {
+        if (m_Characters.Count == 0)
+        {
+            return;
+        }
+
+        ComponentPool<TransformComponent> transforms = manager.GetPool<TransformComponent>();
+        foreach ((Entity entity, PhysicsCharacterHandle handle) in m_Characters)
+        {
+            ref CharacterControllerComponent controller = ref characters.GetRef(entity);
+            Vector2 input = ReadMoveInput();
+            float speed = controller.MoveSpeed;
+            float displacementX = 0.0f;
+            float displacementZ = 0.0f;
+            if (input.LengthSquared() > 1e-6f && speed > 0.0f)
+            {
+                Vector3 direction = ToWorldDirection(input);
+                float length = MathF.Sqrt(input.LengthSquared());
+                displacementX = direction.X / length * speed * deltaTime;
+                displacementZ = direction.Z / length * speed * deltaTime;
+            }
+
+            if (!m_Physics!.MoveCharacter(
+                    m_World,
+                    handle,
+                    displacementX,
+                    displacementZ,
+                    deltaTime,
+                    out PhysicsVec3 feet,
+                    out bool _))
+            {
+                continue;
+            }
+
+            ref TransformComponent transform = ref transforms.GetRef(entity);
+            transform.Position = new Vector3(feet.X, feet.Y, feet.Z);
+        }
+    }
+
+    /// <summary>
+    /// The authored character's state for gates: its feet height and whether the solver reports it
+    /// on walkable ground.
+    /// </summary>
+    internal bool TryGetCharacterObservation(Entity entity, out float feetY, out bool grounded)
+    {
+        feetY = 0.0f;
+        grounded = false;
+        if (m_Physics == null || !m_Characters.TryGetValue(entity, out PhysicsCharacterHandle handle))
+        {
+            return false;
+        }
+
+        if (!m_Physics.TryGetCharacterPosition(m_World, handle, out PhysicsVec3 feet))
+        {
+            return false;
+        }
+
+        feetY = feet.Y;
+        grounded = m_Physics.IsCharacterGrounded(m_World, handle);
+        return true;
+    }
+
+    private Vector2 ReadMoveInput()
+    {
+        if (m_Input == null)
+        {
+            return Vector2.Zero;
+        }
+
+        float forward = 0.0f;
+        if (m_Input.IsKeyDown(InputKey.W)) forward += 1.0f;
+        if (m_Input.IsKeyDown(InputKey.S)) forward -= 1.0f;
+        float right = 0.0f;
+        if (m_Input.IsKeyDown(InputKey.D)) right += 1.0f;
+        if (m_Input.IsKeyDown(InputKey.A)) right -= 1.0f;
+        return new Vector2(right, forward);
+    }
+
+    private Vector3 ToWorldDirection(Vector2 input)
+    {
+        EntityManager? manager = m_Scenes?.ActiveEntityManager;
+        if (manager != null && TryResolveCameraRotation(manager, out Quaternion rotation))
+        {
+            Vector3 forward = Vector3.Transform(MathExtensions.Forward, rotation);
+            forward.Y = 0.0f;
+            Vector3 right = rotation.RightVector();
+            right.Y = 0.0f;
+            Vector3 direction = forward * input.Y + right * input.X;
+            if (direction.LengthSquared() > 1e-6f)
+            {
+                return Vector3.Normalize(direction);
+            }
+        }
+
+        return new Vector3(input.X, 0.0f, input.Y);
+    }
+
+    private bool TryResolveCameraRotation(EntityManager manager, out Quaternion rotation)
+    {
+        ComponentPool<CameraComponent> cameras = manager.GetPool<CameraComponent>();
+        ComponentPool<TransformComponent> transforms = manager.GetPool<TransformComponent>();
+        if (m_HasCamera &&
+            manager.IsAlive(m_CameraEntity) &&
+            cameras.Has(m_CameraEntity) &&
+            transforms.Has(m_CameraEntity))
+        {
+            rotation = transforms.GetRef(m_CameraEntity).Rotation;
+            return true;
+        }
+
+        m_HasCamera = false;
+        ReadOnlySpan<Entity> entities = cameras.GetRawEntityArray();
+        for (int index = 0; index < cameras.Count; index++)
+        {
+            Entity candidate = entities[index];
+            if (!manager.IsAlive(candidate) || !transforms.Has(candidate))
+            {
+                continue;
+            }
+
+            m_CameraEntity = candidate;
+            m_HasCamera = true;
+            rotation = transforms.GetRef(candidate).Rotation;
+            return true;
+        }
+
+        rotation = Quaternion.Identity;
+        return false;
+    }
+
     private void StepWorld(float deltaTime)
     {
         m_Accumulator += deltaTime;
@@ -247,6 +444,8 @@ public sealed class PhysicsRuntimeSubsystem : ITickableSubsystem
         m_World = default;
         m_Accumulator = 0.0f;
         m_Bodies.Clear();
+        m_Characters.Clear();
+        m_HasCamera = false;
         m_HasLoggedStart = false;
     }
 }

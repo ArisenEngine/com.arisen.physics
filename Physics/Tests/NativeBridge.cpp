@@ -29,6 +29,7 @@ extern "C"
         TestRunner::RegisterTest<PhysicsDeterminismTest>();
         TestRunner::RegisterTest<PhysicsBodyOwnershipTest>();
         TestRunner::RegisterTest<PhysicsWorldDrainTest>();
+        TestRunner::RegisterTest<PhysicsCharacterControllerTest>();
 
         // 2. Wrap them for the managed test runner, which calls each entry by name.
         registerCallback("Physics.Unit.PhysicsDeterminismTest", []()
@@ -42,6 +43,10 @@ extern "C"
         registerCallback("Physics.Unit.PhysicsWorldDrainTest", []()
         {
             return RunRegisteredTest("PhysicsWorldDrainTest");
+        });
+        registerCallback("Physics.Unit.PhysicsCharacterControllerTest", []()
+        {
+            return RunRegisteredTest("PhysicsCharacterControllerTest");
         });
     }
 }

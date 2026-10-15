@@ -98,4 +98,55 @@ extern "C"
         const float* directionXyz,
         float maxDistance,
         float* outDistance);
+
+    /// Reports whether any body overlaps the sphere. A hit/hurt query combat reads.
+    ARISEN_PHYSICS_API int Physics_OverlapSphere(
+        void* world,
+        float centerX,
+        float centerY,
+        float centerZ,
+        float radius);
+
+    // ----------------------------------------------------------------------------------------
+    // Character controller (D3)
+    //
+    // A character is a kinematic capsule the caller moves: the solver slides it along geometry,
+    // keeps it on walkable slopes, steps it up stairs, and sticks it to the floor. Positions are
+    // the capsule's base (feet); the shape itself sits above that origin.
+    // ----------------------------------------------------------------------------------------
+
+    /// Creates a character capsule whose base (feet) is at the given position. Returns a
+    /// character handle, or -1 when the world is null.
+    ARISEN_PHYSICS_API int Physics_CreateCharacter(
+        void* world,
+        float radius,
+        float halfHeightOfCylinder,
+        float positionX,
+        float positionY,
+        float positionZ);
+
+    ARISEN_PHYSICS_API void Physics_DestroyCharacter(void* world, int character);
+
+    /// Advances one character by `deltaTime`: the horizontal displacement is sticky (it slides
+    /// along blocked geometry) and gravity is integrated when the character is not grounded.
+    /// Writes the resulting feet position into `outXyz` and the grounded flag into `outGrounded`.
+    /// Returns 0 for an unknown character.
+    ARISEN_PHYSICS_API int Physics_MoveCharacter(
+        void* world,
+        int character,
+        float displacementX,
+        float displacementZ,
+        float deltaTime,
+        float* outXyz,
+        int* outGrounded);
+
+    /// Reads a character's feet position. Returns 0 for an unknown character.
+    ARISEN_PHYSICS_API int Physics_GetCharacterPosition(void* world, int character, float* outXyz);
+
+    /// Ground state of a character: 0 unknown, 1 on ground, 2 on steep ground, 3 not supported,
+    /// 4 in air.
+    ARISEN_PHYSICS_API int Physics_GetCharacterGroundState(void* world, int character);
+
+    /// Characters alive in this world, so a gate can see a leak without inspecting the solver.
+    ARISEN_PHYSICS_API int Physics_GetCharacterCount(void* world);
 }

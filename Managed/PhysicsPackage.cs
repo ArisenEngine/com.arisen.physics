@@ -16,6 +16,7 @@ public sealed class PhysicsPackage : IPackageEntry
 
     private PhysicsService? m_Service;
     private RigidBodySceneComponentCodec? m_SceneComponentCodec;
+    private CharacterControllerSceneComponentCodec? m_CharacterComponentCodec;
     private ISceneComponentExtensionRegistry? m_SceneComponentRegistry;
     private IRuntimeSmokeScenarioRegistry? m_SmokeScenarioRegistry;
     private PhysicsSettleSmokeScenarioProvider? m_SmokeScenarioProvider;
@@ -26,7 +27,9 @@ public sealed class PhysicsPackage : IPackageEntry
         services.RegisterService<IPhysicsService>(m_Service);
         m_SceneComponentRegistry = services.GetService<ISceneComponentExtensionRegistry>();
         m_SceneComponentCodec = new RigidBodySceneComponentCodec();
+        m_CharacterComponentCodec = new CharacterControllerSceneComponentCodec();
         m_SceneComponentRegistry.Register(m_SceneComponentCodec);
+        m_SceneComponentRegistry.Register(m_CharacterComponentCodec);
         m_SmokeScenarioRegistry = services.GetService<IRuntimeSmokeScenarioRegistry>();
         m_SmokeScenarioProvider = new PhysicsSettleSmokeScenarioProvider(m_Service);
         m_SmokeScenarioRegistry.Register(
@@ -53,8 +56,14 @@ public sealed class PhysicsPackage : IPackageEntry
             m_SceneComponentRegistry.Unregister(m_SceneComponentCodec);
         }
 
+        if (m_SceneComponentRegistry != null && m_CharacterComponentCodec != null)
+        {
+            m_SceneComponentRegistry.Unregister(m_CharacterComponentCodec);
+        }
+
         m_SceneComponentRegistry = null;
         m_SceneComponentCodec = null;
+        m_CharacterComponentCodec = null;
         m_Service = null;
         KernelLog.Info("[PhysicsPackage] Unloaded physics service.");
     }

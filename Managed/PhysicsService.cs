@@ -181,6 +181,96 @@ internal sealed class PhysicsService : IPhysicsService
         body.IsValid &&
         Physics_SetBodyRotation(world.Value, body.Value, rotation.X, rotation.Y, rotation.Z, rotation.W) != 0;
 
+    public bool TryOverlapSphere(PhysicsWorldHandle world, PhysicsVec3 center, float radius) =>
+        world.IsValid &&
+        radius > 0.0f &&
+        Physics_OverlapSphere(world.Value, center.X, center.Y, center.Z, radius) != 0;
+
+    public PhysicsCharacterHandle CreateCharacter(
+        PhysicsWorldHandle world,
+        float radius,
+        float halfHeightOfCylinder,
+        PhysicsVec3 feetPosition) =>
+        new(Physics_CreateCharacter(
+            world.Value,
+            radius,
+            halfHeightOfCylinder,
+            feetPosition.X,
+            feetPosition.Y,
+            feetPosition.Z));
+
+    public void DestroyCharacter(PhysicsWorldHandle world, PhysicsCharacterHandle character)
+    {
+        if (world.IsValid && character.IsValid)
+        {
+            Physics_DestroyCharacter(world.Value, character.Value);
+        }
+    }
+
+    public bool MoveCharacter(
+        PhysicsWorldHandle world,
+        PhysicsCharacterHandle character,
+        float displacementX,
+        float displacementZ,
+        float deltaTime,
+        out PhysicsVec3 feetPosition,
+        out bool grounded)
+    {
+        feetPosition = default;
+        grounded = false;
+        if (!world.IsValid || !character.IsValid || deltaTime <= 0.0f)
+        {
+            return false;
+        }
+
+        Span<float> values = stackalloc float[3];
+        int groundedFlag;
+        if (Physics_MoveCharacter(
+                world.Value,
+                character.Value,
+                displacementX,
+                displacementZ,
+                deltaTime,
+                ref values[0],
+                out groundedFlag) == 0)
+        {
+            return false;
+        }
+
+        feetPosition = new PhysicsVec3(values[0], values[1], values[2]);
+        grounded = groundedFlag != 0;
+        return true;
+    }
+
+    public bool TryGetCharacterPosition(
+        PhysicsWorldHandle world,
+        PhysicsCharacterHandle character,
+        out PhysicsVec3 feetPosition)
+    {
+        feetPosition = default;
+        if (!world.IsValid || !character.IsValid)
+        {
+            return false;
+        }
+
+        Span<float> values = stackalloc float[3];
+        if (Physics_GetCharacterPosition(world.Value, character.Value, ref values[0]) == 0)
+        {
+            return false;
+        }
+
+        feetPosition = new PhysicsVec3(values[0], values[1], values[2]);
+        return true;
+    }
+
+    public int GetCharacterCount(PhysicsWorldHandle world) =>
+        world.IsValid ? Physics_GetCharacterCount(world.Value) : 0;
+
+    public bool IsCharacterGrounded(PhysicsWorldHandle world, PhysicsCharacterHandle character) =>
+        world.IsValid &&
+        character.IsValid &&
+        Physics_GetCharacterGroundState(world.Value, character.Value) == 1;
+
     [DllImport(Library, EntryPoint = "Physics_GetSolverVersion", CallingConvention = CallingConvention.Cdecl)]
     private static extern int Physics_GetSolverVersion(ref byte buffer, int capacity);
 
@@ -263,4 +353,43 @@ internal sealed class PhysicsService : IPhysicsService
         ref float directionXyz,
         float maxDistance,
         out float outDistance);
+
+    [DllImport(Library, EntryPoint = "Physics_OverlapSphere", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int Physics_OverlapSphere(
+        nint world,
+        float centerX,
+        float centerY,
+        float centerZ,
+        float radius);
+
+    [DllImport(Library, EntryPoint = "Physics_CreateCharacter", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int Physics_CreateCharacter(
+        nint world,
+        float radius,
+        float halfHeightOfCylinder,
+        float positionX,
+        float positionY,
+        float positionZ);
+
+    [DllImport(Library, EntryPoint = "Physics_DestroyCharacter", CallingConvention = CallingConvention.Cdecl)]
+    private static extern void Physics_DestroyCharacter(nint world, int character);
+
+    [DllImport(Library, EntryPoint = "Physics_MoveCharacter", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int Physics_MoveCharacter(
+        nint world,
+        int character,
+        float displacementX,
+        float displacementZ,
+        float deltaTime,
+        ref float outXyz,
+        out int outGrounded);
+
+    [DllImport(Library, EntryPoint = "Physics_GetCharacterPosition", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int Physics_GetCharacterPosition(nint world, int character, ref float outXyz);
+
+    [DllImport(Library, EntryPoint = "Physics_GetCharacterGroundState", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int Physics_GetCharacterGroundState(nint world, int character);
+
+    [DllImport(Library, EntryPoint = "Physics_GetCharacterCount", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int Physics_GetCharacterCount(nint world);
 }

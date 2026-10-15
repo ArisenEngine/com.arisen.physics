@@ -17,6 +17,9 @@ namespace ArisenEngine::Testing
         constexpr float CapsuleHalfHeight = 0.8f;
         constexpr float CapsuleStartY = 4.0f;
         constexpr int DeterminismSteps = 240;
+        constexpr float CharacterRadius = 0.35f;
+        constexpr float CharacterHalfHeight = 0.8f;
+        constexpr float FixedStep = 1.0f / 60.0f;
 
         /// The canonical scene of D1's gate: a floor at the origin and one character capsule above it.
         inline bool BuildCanonicalScene(void* world, int& capsule)
@@ -229,6 +232,145 @@ namespace ArisenEngine::Testing
             }
 
             LOG_INFO(String::Format("Physics world drain: %d life cycles left no world behind.", CycleCount).c_str());
+            return true;
+        }
+
+        void Teardown() override { }
+    };
+
+    /// D3's gate: the controller moves a capsule against static geometry. The same inputs must
+    /// make it fall to the floor, climb a low step on the way, stop at a wall, slide along that
+    /// wall when the input turns diagonal, and answer the ray and overlap queries combat reads.
+    class PhysicsCharacterControllerTest : public ITest
+    {
+    public:
+        const char* GetName() const override { return "PhysicsCharacterControllerTest"; }
+        TestCategory GetCategory() const override { return TestCategory::Unit; }
+
+        bool Setup() override { return true; }
+
+        bool Run() override
+        {
+            void* world = Physics_CreateWorld();
+            if (world == nullptr)
+            {
+                LOG_ERROR("Physics gate: a world could not be created.");
+                return false;
+            }
+
+            // Floor with its top at y = 0, a low step on the +Z path, and a wall beyond it.
+            bool built =
+                Physics_AddStaticBox(world, 20.0f, 0.5f, 20.0f, 0.0f, -0.5f, 0.0f) >= 0 &&
+                Physics_AddStaticBox(world, 1.0f, 0.15f, 1.0f, 0.0f, 0.15f, 2.0f) >= 0 &&
+                Physics_AddStaticBox(world, 1.5f, 1.0f, 0.25f, 0.0f, 1.0f, 5.0f) >= 0;
+            int character = Physics_CreateCharacter(
+                world,
+                PhysicsGate::CharacterRadius,
+                PhysicsGate::CharacterHalfHeight,
+                0.0f,
+                0.5f,
+                0.0f);
+            if (!built || character < 0)
+            {
+                LOG_ERROR("Physics gate: the character scene could not be built.");
+                Physics_DestroyWorld(world);
+                return false;
+            }
+
+            float position[3] = { 0.0f, 0.0f, 0.0f };
+            int grounded = 0;
+            const float walkStep = 3.0f * PhysicsGate::FixedStep;
+
+            // Fall to the floor and settle there.
+            bool dropped = true;
+            for (int frame = 0; frame < 60; frame++)
+            {
+                dropped = Physics_MoveCharacter(
+                    world, character, 0.0f, 0.0f, PhysicsGate::FixedStep, position, &grounded) != 0 && dropped;
+            }
+
+            bool landed = dropped && grounded != 0 &&
+                position[1] > -0.1f && position[1] < 0.1f;
+
+            // Walk forward: the step must be climbed and the wall must stop the character.
+            float highest = position[1];
+            for (int frame = 0; frame < 240; frame++)
+            {
+                Physics_MoveCharacter(
+                    world, character, 0.0f, walkStep, PhysicsGate::FixedStep, position, &grounded);
+                if (position[1] > highest)
+                {
+                    highest = position[1];
+                }
+            }
+
+            bool climbed = highest > 0.2f;
+            bool stoppedAtWall = position[2] > 3.5f && position[2] < 4.75f && grounded != 0;
+
+            // A diagonal input has to slide along the wall instead of stopping. The character may
+            // eventually round the wall's edge, so the slide is the moment it moves sideways while
+            // the wall still blocks forward progress.
+            float beforeSlideX = position[0];
+            bool slidAlongWall = false;
+            for (int frame = 0; frame < 60; frame++)
+            {
+                Physics_MoveCharacter(
+                    world, character, walkStep, walkStep, PhysicsGate::FixedStep, position, &grounded);
+                if (position[2] < 4.5f && position[0] - beforeSlideX > 0.5f)
+                {
+                    slidAlongWall = true;
+                }
+            }
+
+            bool slid = slidAlongWall && grounded != 0;
+
+            // The queries combat reads: a ray reaches the floor under the character, an overlap
+            // sphere at the wall reports it, and one in open air reports nothing.
+            const float rayOrigin[3] = { position[0], 5.0f, position[2] };
+            const float rayDirection[3] = { 0.0f, -1.0f, 0.0f };
+            float distance = 0.0f;
+            bool rayHit = Physics_RayCastClosest(world, rayOrigin, rayDirection, 20.0f, &distance) != 0 &&
+                distance > 4.5f && distance < 5.2f;
+            bool overlapWall = Physics_OverlapSphere(world, 0.0f, 1.0f, 5.0f, 0.5f) != 0;
+            bool overlapAir = Physics_OverlapSphere(world, 0.0f, 8.0f, 0.0f, 0.5f) != 0;
+
+            int charactersBeforeDestroy = Physics_GetCharacterCount(world);
+            Physics_DestroyCharacter(world, character);
+            int charactersAfterDestroy = Physics_GetCharacterCount(world);
+            Physics_DestroyWorld(world);
+            int liveWorlds = Physics_GetLiveWorldCount();
+
+            if (!landed || !climbed || !stoppedAtWall || !slid || !rayHit || !overlapWall ||
+                overlapAir || charactersBeforeDestroy != 1 || charactersAfterDestroy != 0 ||
+                liveWorlds != 0)
+            {
+                LOG_ERROR(
+                    String::Format(
+                        "Physics gate: landed=%d climbed=%d stopped=%d slid=%d ray=%d wall=%d air=%d "
+                        "characters=%d/%d worlds=%d position=(%f, %f, %f) highest=%f",
+                        landed ? 1 : 0,
+                        climbed ? 1 : 0,
+                        stoppedAtWall ? 1 : 0,
+                        slid ? 1 : 0,
+                        rayHit ? 1 : 0,
+                        overlapWall ? 1 : 0,
+                        overlapAir ? 1 : 0,
+                        charactersBeforeDestroy,
+                        charactersAfterDestroy,
+                        liveWorlds,
+                        static_cast<double>(position[0]),
+                        static_cast<double>(position[1]),
+                        static_cast<double>(position[2]),
+                        static_cast<double>(highest)).c_str());
+                return false;
+            }
+
+            LOG_INFO(
+                String::Format(
+                    "Physics character controller: fell, climbed to %f, stopped at z %f, slid, and the "
+                    "queries answered.",
+                    static_cast<double>(highest),
+                    static_cast<double>(position[2])).c_str());
             return true;
         }
 
