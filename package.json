@@ -17,6 +17,10 @@
       {
         "interface": "ArisenEngine.Physics.IPhysicsService",
         "priority": 100
+      },
+      {
+        "interface": "ArisenKernel.Contracts.IRuntimeViewTarget",
+        "priority": 100
       }
     ],
     "requires": [

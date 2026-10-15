@@ -122,6 +122,9 @@ public interface IPhysicsService
     /// <summary>True while the solver reports the character standing on walkable ground.</summary>
     bool IsCharacterGrounded(PhysicsWorldHandle world, PhysicsCharacterHandle character);
 
+    /// <summary>Launches a grounded character upward; false while it is airborne.</summary>
+    bool TryJumpCharacter(PhysicsWorldHandle world, PhysicsCharacterHandle character, float speed);
+
     /// <summary>Characters alive in this world, so a gate can see a leak.</summary>
     int GetCharacterCount(PhysicsWorldHandle world);
 }

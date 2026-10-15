@@ -23,7 +23,9 @@ D3 adds the character controller and the queries combat reads: a `CharacterContr
 component binds a kinematic capsule whose base is the entity's transform origin, the runtime moves
 it through the solver - sliding along blocked geometry, stepping up low stairs, sticking to the
 floor, and integrating gravity while airborne - and drives it from camera-relative input in
-interactive runs. `RayCastClosest` and a sphere overlap answer the hit/hurt queries, the native
-`PhysicsCharacterControllerTest` gates the whole controller path headlessly, and the `physics-settle`
-scenario also requires every authored character to be grounded, so the component-to-solver-to-
-transform path is gated through ECS as well.
+interactive runs, with Space to jump. `RayCastClosest` and a sphere overlap answer the hit/hurt
+queries, the native `PhysicsCharacterControllerTest` gates the whole controller path headlessly, and
+the `physics-settle` scenario also requires every authored character to be grounded, so the
+component-to-solver-to-transform path is gated through ECS as well. The package also publishes the
+character through the `IRuntimeViewTarget` kernel contract, which is how the shell's camera turns
+an interactive run into a third-person view without either side depending on the other.

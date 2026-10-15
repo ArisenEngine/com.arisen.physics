@@ -324,6 +324,27 @@ namespace ArisenEngine::Testing
 
             bool slid = slidAlongWall && grounded != 0;
 
+            // Jump: a grounded character leaves the ground and gravity brings it back down.
+            bool jumped = Physics_JumpCharacter(world, character, 5.5f) != 0;
+            bool airborne = false;
+            for (int frame = 0; frame < 30; frame++)
+            {
+                Physics_MoveCharacter(
+                    world, character, 0.0f, 0.0f, PhysicsGate::FixedStep, position, &grounded);
+                if (grounded == 0)
+                {
+                    airborne = true;
+                }
+            }
+
+            bool landedAgain = false;
+            for (int frame = 0; frame < 120 && !landedAgain; frame++)
+            {
+                Physics_MoveCharacter(
+                    world, character, 0.0f, 0.0f, PhysicsGate::FixedStep, position, &grounded);
+                landedAgain = grounded != 0 && position[1] > -0.1f && position[1] < 0.1f;
+            }
+
             // The queries combat reads: a ray reaches the floor under the character, an overlap
             // sphere at the wall reports it, and one in open air reports nothing.
             const float rayOrigin[3] = { position[0], 5.0f, position[2] };
@@ -340,18 +361,22 @@ namespace ArisenEngine::Testing
             Physics_DestroyWorld(world);
             int liveWorlds = Physics_GetLiveWorldCount();
 
-            if (!landed || !climbed || !stoppedAtWall || !slid || !rayHit || !overlapWall ||
-                overlapAir || charactersBeforeDestroy != 1 || charactersAfterDestroy != 0 ||
-                liveWorlds != 0)
+            if (!landed || !climbed || !stoppedAtWall || !slid || !jumped || !airborne ||
+                !landedAgain || !rayHit || !overlapWall || overlapAir ||
+                charactersBeforeDestroy != 1 || charactersAfterDestroy != 0 || liveWorlds != 0)
             {
                 LOG_ERROR(
                     String::Format(
-                        "Physics gate: landed=%d climbed=%d stopped=%d slid=%d ray=%d wall=%d air=%d "
+                        "Physics gate: landed=%d climbed=%d stopped=%d slid=%d jumped=%d airborne=%d "
+                        "landedAgain=%d ray=%d wall=%d air=%d "
                         "characters=%d/%d worlds=%d position=(%f, %f, %f) highest=%f",
                         landed ? 1 : 0,
                         climbed ? 1 : 0,
                         stoppedAtWall ? 1 : 0,
                         slid ? 1 : 0,
+                        jumped ? 1 : 0,
+                        airborne ? 1 : 0,
+                        landedAgain ? 1 : 0,
                         rayHit ? 1 : 0,
                         overlapWall ? 1 : 0,
                         overlapAir ? 1 : 0,

@@ -674,6 +674,28 @@ int Physics_GetCharacterGroundState(void* world, int character)
     }
 }
 
+int Physics_JumpCharacter(void* world, int character, float speed)
+{
+    World* target = AsWorld(world);
+    if (target == nullptr || !(speed > 0.0f) ||
+        character < 0 || character >= static_cast<int>(target->Characters.size()) ||
+        !target->Characters[character])
+    {
+        return 0;
+    }
+
+    CharacterVirtual* virtual_character = target->Characters[character]->Virtual.get();
+    if (virtual_character->GetGroundState() != CharacterBase::EGroundState::OnGround)
+    {
+        return 0;
+    }
+
+    Vec3 velocity = virtual_character->GetLinearVelocity();
+    velocity.SetY(speed);
+    virtual_character->SetLinearVelocity(velocity);
+    return 1;
+}
+
 int Physics_GetCharacterCount(void* world)
 {
     World* target = AsWorld(world);

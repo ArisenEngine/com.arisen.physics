@@ -1,4 +1,5 @@
 using ArisenEngine.Resources.Serialization;
+using ArisenKernel.Contracts;
 using ArisenKernel.Diagnostics;
 using ArisenKernel.Lifecycle;
 using ArisenKernel.Packages;
@@ -20,11 +21,14 @@ public sealed class PhysicsPackage : IPackageEntry
     private ISceneComponentExtensionRegistry? m_SceneComponentRegistry;
     private IRuntimeSmokeScenarioRegistry? m_SmokeScenarioRegistry;
     private PhysicsSettleSmokeScenarioProvider? m_SmokeScenarioProvider;
+    private CharacterViewTarget? m_ViewTarget;
 
     public void OnLoad(IServiceRegistry services)
     {
         m_Service = new PhysicsService();
         services.RegisterService<IPhysicsService>(m_Service);
+        m_ViewTarget = new CharacterViewTarget();
+        services.RegisterService<IRuntimeViewTarget>(m_ViewTarget);
         m_SceneComponentRegistry = services.GetService<ISceneComponentExtensionRegistry>();
         m_SceneComponentCodec = new RigidBodySceneComponentCodec();
         m_CharacterComponentCodec = new CharacterControllerSceneComponentCodec();
@@ -51,6 +55,7 @@ public sealed class PhysicsPackage : IPackageEntry
 
         m_SmokeScenarioRegistry = null;
         m_SmokeScenarioProvider = null;
+        m_ViewTarget = null;
         if (m_SceneComponentRegistry != null && m_SceneComponentCodec != null)
         {
             m_SceneComponentRegistry.Unregister(m_SceneComponentCodec);

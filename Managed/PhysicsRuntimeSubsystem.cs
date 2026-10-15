@@ -18,6 +18,7 @@ namespace ArisenEngine.Physics;
 public sealed class PhysicsRuntimeSubsystem : ITickableSubsystem
 {
     private const float FixedTimeStep = 1.0f / 60.0f;
+    private const float JumpSpeed = 5.5f;
 
     // A hitch may not turn into an unbounded catch-up burst; the loop keeps at most this many fixed
     // steps per frame and drops the remainder, which is a bounded-time policy on top of a
@@ -37,6 +38,9 @@ public sealed class PhysicsRuntimeSubsystem : ITickableSubsystem
     private float m_Accumulator;
     private bool m_IsIdle;
     private bool m_HasLoggedStart;
+
+    /// <summary>True while at least one authored character is bound and can be followed.</summary>
+    internal bool HasViewTarget => m_Characters.Count > 0;
 
     public int Priority => 90;
 
@@ -274,6 +278,11 @@ public sealed class PhysicsRuntimeSubsystem : ITickableSubsystem
             float speed = controller.MoveSpeed;
             float displacementX = 0.0f;
             float displacementZ = 0.0f;
+            if (m_Input != null && m_Input.IsKeyDown(InputKey.Space))
+            {
+                m_Physics!.TryJumpCharacter(m_World, handle, JumpSpeed);
+            }
+
             if (input.LengthSquared() > 1e-6f && speed > 0.0f)
             {
                 Vector3 direction = ToWorldDirection(input);
@@ -320,6 +329,41 @@ public sealed class PhysicsRuntimeSubsystem : ITickableSubsystem
         feetY = feet.Y;
         grounded = m_Physics.IsCharacterGrounded(m_World, handle);
         return true;
+    }
+
+    /// <summary>
+    /// The point an interactive viewer should follow: the first authored character's chest. The
+    /// shell's camera consumes this through <c>IRuntimeViewTarget</c>, so it never has to know
+    /// which package owns the player.
+    /// </summary>
+    internal bool TryGetViewTarget(out Vector3 worldPosition)
+    {
+        worldPosition = default;
+        EntityManager? manager = m_Scenes?.ActiveEntityManager;
+        if (m_Physics == null || manager == null || m_Characters.Count == 0)
+        {
+            return false;
+        }
+
+        ComponentPool<CharacterControllerComponent> controllers =
+            manager.GetPool<CharacterControllerComponent>();
+        foreach ((Entity entity, PhysicsCharacterHandle handle) in m_Characters)
+        {
+            if (!controllers.Has(entity) ||
+                !m_Physics.TryGetCharacterPosition(m_World, handle, out PhysicsVec3 feet))
+            {
+                continue;
+            }
+
+            ref CharacterControllerComponent controller = ref controllers.GetRef(entity);
+            worldPosition = new Vector3(
+                feet.X,
+                feet.Y + controller.HalfHeight + controller.Radius,
+                feet.Z);
+            return true;
+        }
+
+        return false;
     }
 
     private Vector2 ReadMoveInput()

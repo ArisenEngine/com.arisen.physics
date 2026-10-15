@@ -271,6 +271,15 @@ internal sealed class PhysicsService : IPhysicsService
         character.IsValid &&
         Physics_GetCharacterGroundState(world.Value, character.Value) == 1;
 
+    public bool TryJumpCharacter(
+        PhysicsWorldHandle world,
+        PhysicsCharacterHandle character,
+        float speed) =>
+        world.IsValid &&
+        character.IsValid &&
+        speed > 0.0f &&
+        Physics_JumpCharacter(world.Value, character.Value, speed) != 0;
+
     [DllImport(Library, EntryPoint = "Physics_GetSolverVersion", CallingConvention = CallingConvention.Cdecl)]
     private static extern int Physics_GetSolverVersion(ref byte buffer, int capacity);
 
@@ -389,6 +398,9 @@ internal sealed class PhysicsService : IPhysicsService
 
     [DllImport(Library, EntryPoint = "Physics_GetCharacterGroundState", CallingConvention = CallingConvention.Cdecl)]
     private static extern int Physics_GetCharacterGroundState(nint world, int character);
+
+    [DllImport(Library, EntryPoint = "Physics_JumpCharacter", CallingConvention = CallingConvention.Cdecl)]
+    private static extern int Physics_JumpCharacter(nint world, int character, float speed);
 
     [DllImport(Library, EntryPoint = "Physics_GetCharacterCount", CallingConvention = CallingConvention.Cdecl)]
     private static extern int Physics_GetCharacterCount(nint world);

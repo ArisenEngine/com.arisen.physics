@@ -147,6 +147,10 @@ extern "C"
     /// 4 in air.
     ARISEN_PHYSICS_API int Physics_GetCharacterGroundState(void* world, int character);
 
+    /// Launches a grounded character upward. Returns 1 when it jumped, 0 when it was airborne or
+    /// the character is unknown.
+    ARISEN_PHYSICS_API int Physics_JumpCharacter(void* world, int character, float speed);
+
     /// Characters alive in this world, so a gate can see a leak without inspecting the solver.
     ARISEN_PHYSICS_API int Physics_GetCharacterCount(void* world);
 }
